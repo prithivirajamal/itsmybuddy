@@ -1,19 +1,23 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>My Buddy</title>
-<meta name="theme-color" content="#2742c9" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0e1420" media="(prefers-color-scheme: dark)">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="My Buddy">
+<meta name="theme-color" content="#14213d">
+<meta name="description" content="Track friends' card EMIs, loans lent and borrowed, and your chit fund.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="My Buddy">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
+html{-webkit-text-size-adjust:100%;color-scheme:light dark}
+
 /* Layout: one phone-width column, three tabs on a bottom bar (Home, EMIs, Loans), add-forms slide up as a sheet. */
 :root{
   --bg:#eef1f6; --surface:#ffffff; --ink:#14213d; --muted:#5b6b86; --line:#d9dfeb;
@@ -32,10 +36,8 @@
   --accent:#8fa2ff; --accent-ink:#0e1420; --soft:#1f2a45;
   --good:#4cc38a; --good-soft:#15302a; --warn:#e0b04a; --warn-soft:#33290f; --bad:#f0766f; --bad-soft:#3a1c1e; color-scheme:dark}
 *{box-sizing:border-box}
-html{background:var(--bg);-webkit-text-size-adjust:100%}
-body{margin:0;min-height:100vh}
 body{background:var(--bg);color:var(--ink);font:15px/1.45 var(--f-body);
-  padding-top:calc(20px + env(safe-area-inset-top,0px));padding-bottom:104px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  padding-block:20px 104px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 .wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
@@ -119,17 +121,19 @@ nav svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;st
 .mb .dot{position:absolute;top:5px;right:5px;width:6px;height:6px;border-radius:50%;background:var(--good)}
 .panel{display:flex;flex-direction:column;gap:12px}
 .mt{font:700 18px/1.2 var(--f-display)}
+
+.fld input[type=file]{padding:8px}
+
 </style>
 </head>
 <body>
 <div class="wrap" id="app"></div>
 <nav aria-label="Sections"><div class="in" id="nav"></div></nav>
 <div id="sheet-root"></div>
-
 <script>
 (function(){
 "use strict";
-var LS_KEY="my-buddy-v1";
+var LS_KEY="friends-ledger-v1";
 var state={emis:[],loans:[],borrowed:[],chit:null};
 var view="home", openPlan=null, loaded=false, loadNote="", localOnly=false;
 var ledgerRef=null, ver=0, savedVer=0, timer=null, chain=Promise.resolve(), statusText="";
@@ -188,9 +192,9 @@ function normalize(d){d=d||{};return {emis:Array.isArray(d.emis)?d.emis:[],loans
 function setStatus(t){statusText=t;var el=document.getElementById("status");if(el)el.textContent=t}
 function lsSave(){try{localStorage.setItem(LS_KEY,JSON.stringify(state))}catch(e){}}
 function lsLoad(){try{var r=localStorage.getItem(LS_KEY);return r?normalize(JSON.parse(r)):null}catch(e){return null}}
-function touch(){ver++;lsSave();setStatus(localOnly?"Saved on this phone":"Saving…");clearTimeout(timer);timer=setTimeout(flush,350);render()}
+function touch(){ver++;lsSave();setStatus(localOnly?"Saved on this device only":"Saving…");clearTimeout(timer);timer=setTimeout(flush,350);render()}
 function flush(){
-  if(!ledgerRef){setStatus("Saved on this phone");savedVer=ver;return}
+  if(!ledgerRef){setStatus("Saved on this device only");savedVer=ver;return}
   var snap=JSON.parse(JSON.stringify(state)),v=ver;
   chain=chain.then(function(){return ledgerRef.set(snap)}).then(function(){
     if(v>savedVer)savedVer=v;
@@ -294,11 +298,12 @@ function renderBorrowed(){
 
 function render(){
   var app=document.getElementById("app");
-  var head='<header><h1>My Buddy</h1><div style="display:flex;gap:10px;align-items:center"><span class="status" id="status" role="status">'+esc(statusText)+'</span><button class="btn sm" data-a="backup">Backup</button></div></header>';
+  var head='<header><h1>My Buddy</h1><span style="display:flex;gap:12px;align-items:baseline"><span class="status" id="status" role="status">'+esc(statusText)+'</span><button class="link" data-a="backup">Backup</button></span></header>';
   var body="";
   if(!loaded){body='<div class="empty"><p>Opening your ledger…</p></div>'}
   else{
     if(loadNote)body+='<div class="banner"><span>'+esc(loadNote)+'</span></div>';
+    if(needsBackup())body+='<div class="banner"><span>Save a backup of your data. It is stored only on this phone.</span><button class="link" data-a="backup">Backup</button></div>';
     if(hasExamples())body+='<div class="banner"><span>Showing example entries.</span><button class="link" data-a="clear-ex">Clear examples</button></div>';
     body+=view==="emis"?renderEmis():view==="loans"?renderLoans():view==="borrowed"?renderBorrowed():view==="chit"?renderChit():renderHome()}
   app.innerHTML=head+body+nameList("dl-f",friends())+nameList("dl-c",cards());
@@ -512,32 +517,14 @@ function togglePayout(m){var c=state.chit;if(!c)return;c.payouts=c.payouts||{};v
   if(rec.paidOn){rec.paidOn=null;rec.amount=0}else{var po=cpayout(c,m);if(!po)return;rec.paidOn=today();rec.amount=po.net}
   c.payouts[m]=rec;touch()}
 
-/* ---------- backup & restore ---------- */
-function openBackupSheet(){var lb="";try{lb=localStorage.getItem(LS_KEY+"-bk")||""}catch(e){}
-  document.getElementById("sheet-root").innerHTML='<div class="scrim" data-a="scrim"><div class="sheet"><h3>Backup &amp; restore</h3>'+
-    '<div class="hint">Your entries are saved only on this phone. If you clear browser data or switch phones they are lost, so export a backup now and then.</div>'+
-    '<div class="s" style="font-size:13px;color:var(--muted)">'+(lb?"Last backup: "+esc(fmtDate(lb)):"No backup made yet.")+'</div>'+
-    '<div class="err" id="f-err" role="alert"></div>'+
-    '<div class="actions"><button class="btn pri" data-a="export">Export backup</button><button class="btn" data-a="import">Import backup</button></div>'+
-    '<input type="file" id="imp-file" accept=".json,application/json" hidden>'+
-    '<div class="actions" style="justify-content:flex-end"><button class="btn" data-a="close">Close</button></div></div></div>'}
-function exportData(){var blob=new Blob([JSON.stringify({app:"my-buddy",version:1,exported:new Date().toISOString(),data:state},null,2)],{type:"application/json"});
-  var a=document.createElement("a"),u=URL.createObjectURL(blob);a.href=u;a.download="my-buddy-backup-"+today()+".json";document.body.appendChild(a);a.click();a.remove();
-  setTimeout(function(){URL.revokeObjectURL(u)},3000);try{localStorage.setItem(LS_KEY+"-bk",today())}catch(e){}openBackupSheet()}
-function importFile(f){var r=new FileReader();r.onload=function(){try{var j=JSON.parse(r.result),n=normalize(j&&j.data?j.data:j);
-    if(!n.emis.length&&!n.loans.length&&!n.borrowed.length&&!n.chit)throw 0;
-    if(!confirm("Replace everything on this phone with this backup?"))return;state=n;closeSheet();touch()}
-  catch(e){var er=document.getElementById("f-err");if(er)er.textContent="That file is not a valid My Buddy backup."}};r.readAsText(f)}
-document.addEventListener("change",function(e){if(e.target.id==="imp-file"&&e.target.files[0])importFile(e.target.files[0])});
-
 /* ---------- events ---------- */
 document.addEventListener("click",function(e){
   var el=e.target.closest("[data-a]");if(!el)return;var a=el.getAttribute("data-a"),id=el.getAttribute("data-id");
   if(a==="scrim"){if(e.target===el)closeSheet();return}
-  if(a==="close"){closeSheet();return}
   if(a==="backup"){openBackupSheet();return}
-  if(a==="export"){exportData();return}
-  if(a==="import"){var fi=document.getElementById("imp-file");if(fi)fi.click();return}
+  if(a==="export"){doExport();return}
+  if(a==="import"){doImport();return}
+  if(a==="close"){closeSheet();return}
   if(a==="tab"){view=el.getAttribute("data-v");location.hash=view;render();window.scrollTo(0,0);return}
   if(a==="new-emi"){openEmiSheet();return}
   if(a==="new-loan"){openLoanSheet();return}
@@ -574,15 +561,44 @@ document.addEventListener("input",function(e){var i=e.target.id;
   if(i==="f-date"||i==="f-months"||i==="f-nodue")emiHint();
   if(i==="f-due")dueTouched=true;
   if(i==="f-date"&&!editing&&!dueTouched&&document.getElementById("f-due")&&e.target.value)document.getElementById("f-due").value=addMonths(e.target.value,1)});
+document.addEventListener("change",function(e){if(e.target.id==="f-imp")readImport(e.target.files&&e.target.files[0])});
 document.addEventListener("keydown",function(e){if(e.key==="Escape")closeSheet()});
 function readHash(){var h=location.hash.replace("#","");if(h==="emis"||h==="loans"||h==="borrowed"||h==="chit"||h==="home")view=h}
 window.addEventListener("hashchange",function(){readHash();render()});
 readHash();render();
 
+/* ---------- backup ---------- */
+var pendingImport=null;
+function lastBackup(){try{return localStorage.getItem(LS_KEY+"-backup")||""}catch(e){return ""}}
+function needsBackup(){if(!state.emis.length&&!state.loans.length&&!state.borrowed.length&&!state.chit)return false;var lb=lastBackup();return !lb||daysBetween(lb,today())>=30}
+function openBackupSheet(){pendingImport=null;var lb=lastBackup();
+  document.getElementById("sheet-root").innerHTML='<div class="scrim" data-a="scrim"><div class="sheet"><h3>Backup</h3>'+
+    '<div class="hint">Your data is saved only on this phone. Clearing browser data or changing phones erases it. Save a backup file now and then, and keep it somewhere safe such as Google Drive or WhatsApp to yourself.</div>'+
+    '<button class="btn pri" data-a="export">Save backup file</button>'+
+    '<div class="s" style="font-size:13px;color:var(--muted)">'+(lb?"Last backup: "+fmtDate(lb):"No backup saved yet.")+'</div>'+
+    '<div class="fld"><label for="f-imp">Restore from a backup file</label><input id="f-imp" type="file" accept=".json,application/json"></div>'+
+    '<div id="imp-info"></div><div class="actions" style="justify-content:flex-end"><button class="btn" data-a="close">Close</button></div></div></div>'}
+function doExport(){var data={app:"friends-ledger",version:1,saved:new Date().toISOString(),data:state};
+  var blob=new Blob([JSON.stringify(data,null,1)],{type:"application/json"}),a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);a.download="friends-ledger-backup-"+today()+".json";document.body.appendChild(a);a.click();
+  setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},1500);
+  try{localStorage.setItem(LS_KEY+"-backup",today())}catch(e){}
+  var info=document.getElementById("imp-info");if(info)info.innerHTML='<div class="hint">Backup file saved to your downloads.</div>';
+  render()}
+function readImport(file){var info=document.getElementById("imp-info");if(!file||!info)return;
+  var r=new FileReader();r.onload=function(){
+    try{var o=JSON.parse(r.result);var d=normalize(o&&o.app==="friends-ledger"?o.data:o);
+      pendingImport=d;info.innerHTML='<div class="hint">This file has '+d.emis.length+' EMIs, '+d.loans.length+' loans lent, '+d.borrowed.length+' borrowed'+(d.chit?", and a chit fund":"")+'. Restoring replaces everything now on this phone.</div><div class="actions" style="margin-top:8px"><button class="btn danger" data-a="import">Replace my data with this file</button></div>'}
+    catch(e){pendingImport=null;info.innerHTML='<div class="err">That file could not be read. Choose a backup file saved from this app.</div>'}};
+  r.readAsText(file)}
+function doImport(){if(!pendingImport)return;state=pendingImport;pendingImport=null;closeSheet();touch()}
+
 /* ---------- boot ---------- */
-localOnly=true;(function(){var s=lsLoad();if(s)state=s;loaded=true;setStatus("Saved on this phone");render();
-  try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}})();
-if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})})}
+localOnly=true;
+(function(){var s=lsLoad();if(s)state=s;loaded=true;setStatus("Saved on this phone");render();
+  try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
+  if("serviceWorker" in navigator&&location.protocol!=="file:"){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})})}
+})();
 })();
 </script>
 </body>
